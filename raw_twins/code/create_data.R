@@ -26,8 +26,6 @@ dat_2kg <- dat %>%
 dplyr::select(-c(data_year, infant_id_0, infant_id_1, brstate_reg, mplbir_reg, stoccfipb_reg))
 
 
-write.csv(dat_)
-
 # sum(dat_2kg$mort_0)/length(dat_2kg$mort_0) # 18.8 as stated
 # sum(dat_2kg$mort_1)/length(dat_2kg$mort_1) # 16.4 as stated
 
@@ -99,12 +97,12 @@ sum(tx_vec)/length(tx_vec)
 
 out_data <- dat_complete %>%
   as.data.frame() %>%
-  bind_cols("Treatment" = tx_vec) 
+  bind_cols("Treatment" = tx_vec) %>%
+  mutate(gestat10 = as.factor(gestat10))
 
 names(out_data)[which(names(out_data)=="gestat10")]<-"gestat"
 
 out2 <- setDT(out_data)
-
 
 out_df <- one_hot(out2, cols = "gestat") %>%
   as.data.frame() %>%
@@ -119,11 +117,11 @@ out_df <- one_hot(out2, cols = "gestat") %>%
       .names = '{.col}_3'
     ))
   
-  df %>% mutate(
-    across(
-      .cols = contains('a', ignore.case = FALSE),
-      .names = '{.col}2'
-    )
+  # df %>% mutate(
+  #   across(
+  #     .cols = contains('a', ignore.case = FALSE),
+  #     .names = '{.col}2'
+  #   )
 
     
     # flipping some of gestation codes with some probability
@@ -141,22 +139,40 @@ out_df <- one_hot(out2, cols = "gestat") %>%
       z <- s * (1-x) + (1 - s) * x
     }
     
-    flip(1,0.2)
+    flip(1, 0.2)
     
-    flip(out_df$gestat_1, 0.2) == out_df$gestat_1
+    sum(flip(out_df$gestat_1, 0.2) == out_df$gestat_1)
+    
+    gestat_cols <- out_df %>%
+      dplyr::select(starts_with("gestat"))
+    
+    tst <- apply(gestat_cols, c(1,2), flip, p=0.2)
 
-    # flip the bits
-    out_df_cp <- out_df %>%
+    out_flipped <- as.data.frame(tst)
+    
+    
+    out_flipped2 <- out_df %>%
+      dplyr::select(-starts_with("gestat")) %>%
+      bind_cols(out_flipped)
+    
+    # hide data from one twin ("treatment")
+    final_out <- out_flipped2 %>%
       rowwise() %>%
-      mutate(across(starts_with("gestat"), function(x) flip(x, 0.2))) %>%
       mutate(Y = Treatment * mort_1 + (1 - Treatment) * mort_0,
              dbirwt = Treatment * dbirwt_1 + (1 - Treatment) * dbirwt_0,
-             bord = Treatment * bord_1 + (1 - Treatment) * bord_0) %>%
-      dplyr::select()
+             bord = Treatment * bord_1 + (1 - Treatment) * bord_0) 
     
     
- 
+    write.csv(final_out, "cleaned_twins_flipped.csv")
     
+    
+    final_out_2 <- out_df %>%
+      rowwise() %>%
+      mutate(Y = Treatment * mort_1 + (1 - Treatment) * mort_0,
+             dbirwt = Treatment * dbirwt_1 + (1 - Treatment) * dbirwt_0,
+             bord = Treatment * bord_1 + (1 - Treatment) * bord_0) 
+    
+    write.csv(final_out, "cleaned_twins.csv")
 
 # w_o <- mvrnorm(n = N, mu = rep(0,N), Sigma=Sigma)
 
